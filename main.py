@@ -111,7 +111,8 @@ class MainWindow(QMainWindow):
         data = self.ui.dateEdit.text()
         import datetime
         data = datetime.datetime.strptime(data, "%d/%m/%Y")
-        conn = db.DB(self.cfg.config)
+        cfg = self.cfg.get('default')
+        conn = db.DB(**cfg)
         if conn.conn():
             logger.debug('Conexão feita com sucesso !')
             conn.update(data.__str__(), empresa)
@@ -125,7 +126,8 @@ class MainWindow(QMainWindow):
 
     def set_combo(self):
         if self.cfg.is_config('default'):
-            conn = db.DB(self.cfg.config)
+            cfg = self.cfg.get('default')
+            conn = db.DB(**cfg)
             if conn.conn():
                 logger.debug('Conexão feita com sucesso !')
                 procs = conn.get_empresa()
@@ -145,7 +147,6 @@ class MainWindow(QMainWindow):
         self.ui.setupUi(self)
         self.ui.centralwidget.resize(445, 300)
         self.ui.buttonReady.clicked.connect(self.make_actions)
-        self.set_combo()
         self.ui.dateEdit.setDateTime(QtCore.QDateTime.currentDateTime())
         icon = QIcon(path)
         self.setWindowIcon(icon)
@@ -163,6 +164,8 @@ class MainWindow(QMainWindow):
                 cfg.exec_()
 
             self.hide()
+        else:
+            self.set_combo()
 
 
 if __name__ == "__main__":
