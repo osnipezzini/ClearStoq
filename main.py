@@ -35,13 +35,39 @@ class ConfigWindow(QDialog):
         self.ui.buttonBox.button(QDialogButtonBox.Reset).clicked.connect(self.reset)
 
     def accept(self):
+        self.validate_fields()
         cfg = self.field2dict()
         self.config['default'] = cfg
-        self.save()
+        dbe = db.DB(**cfg)
+        if dbe.conn():
+            self.save()
+        else:
+            msg = QMessageBox()
+            msg.setWindowIcon(self.windowIcon())
+            msg.setWindowTitle("Aviso")
+            msg.setText(f"Ocorreu um erro ao conectar ao banco de dados , verifique os dados informados e tente novamente .")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setStandardButtons(QMessageBox.Ok)
+            ret = msg.exec_()
+
+    def validate_fields(self):
+        self.ui.textHost.setText(self.ui.textHost.text() if self.ui.textHost.text() != "" else "localhost")
+        self.ui.textPort.setText(self.ui.textPort.text() if self.ui.textPort.text() != "" else "5432")
+        self.ui.textUser.setText(self.ui.textUser.text() if self.ui.textUser.text() != "" else "postgres")
+        self.ui.textName.setText(self.ui.textName.text() if self.ui.textName.text() != "" else "autosystem")
 
     def save(self):
         cfg = Config()
-        cfg.set(self.config)
+        if cfg.set(self.config):
+            msg = QMessageBox()
+            msg.setWindowIcon(self.windowIcon())
+            msg.setWindowTitle("Aviso")
+            msg.setText(f"As configurações foram salvas em : {cfg.cfg_file} .")
+            msg.setIcon(QMessageBox.Information)
+            msg.setStandardButtons(QMessageBox.Ok)
+            ret = msg.exec_()
+            if ret == QMessageBox.Ok:
+                self.close()
 
     def dict2field(self, cfg):
         self.ui.textHost.setText(cfg["host"])
@@ -126,9 +152,9 @@ class MainWindow(QMainWindow):
         if not self.cfg.is_config('default'):
             msg = QMessageBox()
             msg.setWindowIcon(icon)
-            msg.setWindowTitle("Aviso")
-            msg.setText("As configurações não foram encontradas , será aberta uma janela para configurar.")
-            msg.setIcon(QMessageBox.Information)
+            msg.setWindowTitle("Atenção")
+            msg.setText("As configurações não foram encontradas , será aberta uma janela para configurar .")
+            msg.setIcon(QMessageBox.Critical)
             msg.setStandardButtons(QMessageBox.Ok)
             ret = msg.exec_()
             if ret == QMessageBox.Ok:

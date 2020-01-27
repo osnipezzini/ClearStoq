@@ -12,6 +12,7 @@ class DB:
         self.password = password
         self.cur = None
 
+
     def conn(self):
         try:
             conn = psycopg2.connect(
