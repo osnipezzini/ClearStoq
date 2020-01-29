@@ -58,15 +58,11 @@ class Config:
             return dict()
 
     def set(self, cfg):
-        try:
-            if os.path.exists(self.cfg_file):
-                os.remove(self.cfg_file)
-            with open(self.cfg_file, 'w') as outfile:
-                json.dump(cfg, outfile)
-                logger.info('Configurações salvar em : ' + os.path.relpath(self.cfg_file))
-                return True
-        except Exception as e:
-            logger.debug(e)
+        if os.path.exists(self.cfg_file):
+            os.remove(self.cfg_file)
+        with open(self.cfg_file, 'w') as outfile:
+            json.dump(cfg, outfile)
+            logger.info('Configurações salvar em : ' + os.path.relpath(self.cfg_file))
 
     def is_config(self, db_conn):
         if os.path.exists(self.cfg_file):

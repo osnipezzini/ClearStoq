@@ -13,6 +13,7 @@ class DB:
         self.cur = None
         self.text_ctrl = text_ctrl
 
+
     def conn(self):
         try:
             conn = psycopg2.connect(
