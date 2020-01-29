@@ -1,148 +1,162 @@
 import os
 import sys
 
-from PySide2 import QtCore
-from PySide2.QtCore import QTime
-from PySide2.QtWidgets import QApplication, QMainWindow, QDialog, QMessageBox, QDialogButtonBox
-from PySide2.QtGui import QIcon  # Get the package to add an icon
+import wx
 
 import db
-from gui.main_window import Ui_MainWindow
-from gui.config_window import Ui_Dialog
-from utils import resource_path
-from utils.log import logger
 from config import Config
+from gui.main_ui import ConfigUI, MainUI
+from utils import resource_path
+from utils.log import log as logger
 
 path = resource_path("Icon.ico")
 
 
-class ConfigWindow(QDialog):
+class ConfigWindow(ConfigUI):
     def __init__(self, parent):
-        super(ConfigWindow, self).__init__()
+        super(ConfigWindow, self).__init__(parent)
         self.parent = parent
-        self.ui = Ui_Dialog()
-        self.ui.setupUi(self)
         self.config = dict()
-        self.connect_signals()
         cfg = Config()
+        self.exit = True
         if cfg.is_config('default'):
             self.config = cfg.get('default')
             self.dict2field(self.config)
 
-    def connect_signals(self):
-        self.ui.buttonBox.accepted.connect(self.accept)
-        self.ui.buttonBox.rejected.connect(self.cancel)
-        self.ui.buttonBox.button(QDialogButtonBox.Reset).clicked.connect(self.reset)
-
-    def accept(self):
+    def accept(self, event):
         cfg = self.field2dict()
         self.config['default'] = cfg
         self.save()
 
     def save(self):
         cfg = Config()
-        cfg.set(self.config)
+        conn = db.DB(**self.config['default'])
+        if conn.conn():
+            if cfg.set(self.config):
+                msg = wx.MessageBox(
+                    "As configurações foram salvas em : " + cfg.cfg_file,
+                    caption="Sucesso", style=wx.OK | wx.CENTRE | wx.ICON_INFORMATION, parent=None,
+                )
+                if msg == wx.OK:
+                    self.EndModal(wx.OK)
+            else:
+                wx.MessageBox(
+                    "Ocorreu um erro ao salvar as configurações , verificar se o arquivo " +
+                    cfg.cfg_file + " não está sendo usado e se você tem permissão de escrita !",
+                    caption="Erro", style=wx.OK | wx.CENTRE | wx.ICON_ERROR, parent=None,
+                )
+        else:
+            wx.MessageBox(
+                "Ocorreu um erro ao conectar ao banco de dados, verifique os dados informados e tente novamente !",
+                caption="Erro", style=wx.OK | wx.CENTRE | wx.ICON_WARNING, parent=None,
+            )
 
     def dict2field(self, cfg):
-        self.ui.textHost.setText(cfg["host"])
-        self.ui.textPort.setText(cfg["port"])
-        self.ui.textUser.setText(cfg["user"])
-        self.ui.textPassword.setText(cfg["password"])
-        self.ui.textName.setText(cfg["dbname"])
+        self.textHost.setText(cfg["host"])
+        self.textPort.setText(cfg["port"])
+        self.textUser.setText(cfg["user"])
+        self.textPassword.setText(cfg["password"])
+        self.textName.setText(cfg["dbname"])
+
+    def validate_fields(self):
+        self.textHost.SetValue("localhost" if self.textHost.GetValue() == "" else self.textHost.GetValue())
+        self.textPort.SetValue("5432" if self.textPort.GetValue() == "" else self.textPort.GetValue())
+        self.textName.SetValue("autosystem" if self.textName.GetValue() == "" else self.textName.GetValue())
+        self.textUser.SetValue("postgres" if self.textUser.GetValue() == "" else self.textUser.GetValue())
 
     def field2dict(self):
+        self.validate_fields()
         cfg = dict()
-        cfg["host"] = self.ui.textHost.text()
-        cfg["port"] = self.ui.textPort.text()
-        cfg["dbname"] = self.ui.textName.text()
-        cfg["user"] = self.ui.textUser.text()
-        cfg["password"] = self.ui.textPassword.text()
+        cfg["host"] = self.textHost.GetValue()
+        cfg["port"] = self.textPort.GetValue()
+        cfg["dbname"] = self.textName.GetValue()
+        cfg["user"] = self.textUser.GetValue()
+        cfg["password"] = self.textPassword.GetValue()
         return cfg
 
     def reset(self):
-        self.ui.textHost.setText("")
-        self.ui.textPort.setText("")
-        self.ui.textUser.setText("")
-        self.ui.textPassword.setText("")
-        self.ui.textName.setText("")
+        self.textHost.SetValue("")
+        self.textPort.SetValue("")
+        self.textUser.SetValue("")
+        self.textPassword.SetValue("")
+        self.textName.SetValue("")
 
-    def cancel(self):
+    def cancel(self, event):
         sys.exit()
 
 
-class MainWindow(QMainWindow):
+class MainWindow(MainUI):
 
     def log(self, text):
-        logger.info(text)
+        logger(text, self.textLog)
 
-    def make_actions(self):
-        self.ui.textLog.appendPlainText("")
-        idx = self.ui.comboEmpresa.currentIndex()
+    def make_actions(self, event):
+        self.textLog.AppendText("")
+        idx = self.comboEmpresa.CurrentSelection
         empresa = None
         if idx > 0:
             empresa = self.grids[idx]
 
-        data = self.ui.dateEdit.text()
-        import datetime
-        data = datetime.datetime.strptime(data, "%d/%m/%Y")
-        conn = db.DB(self.cfg.config)
+        data = self.dateEdit.GetValue()
+        conn = db.DB(**self.cfg, text_ctrl=self.textLog)
         if conn.conn():
-            logger.debug('Conexão feita com sucesso !')
+            self.log('Conexão feita com sucesso !')
             conn.update(data.__str__(), empresa)
-            conn.delete(data.strftime("%Y-%m-%d"), empresa)
+            conn.delete(data.Format("%Y-%m-%d"), empresa)
             path = os.path.join('C:\\', 'autosystem', 'main.exe')
             os.chdir("C:\\autosystem")
+            os.spawnl(os.P_NOWAIT, path, '--estoque')
 
     def print_empresa(self):
         self.log(
-            f"GRID : {self.grids[0][self.ui.comboEmpresa.currentIndex()]} Nome : {self.ui.comboEmpresa.currentText()}")
+            f"GRID : {self.grids[0][self.comboEmpresa.currentIndex()]} Nome : {self.comboEmpresa.currentText()}")
 
     def set_combo(self):
-        if self.cfg.is_config('default'):
-            conn = db.DB(self.cfg.config)
-            if conn.conn():
-                logger.debug('Conexão feita com sucesso !')
-                procs = conn.get_empresa()
-                self.grids.append(0)
-                self.ui.comboEmpresa.addItem("TODAS AS EMPRESAS")
-                for proc in procs:
-                    empresa = proc['nome']
-                    grid = proc['grid']
-                    self.grids.append((grid, empresa))
-                    self.ui.comboEmpresa.addItem(empresa)
+        conn = db.DB(**self.cfg, text_ctrl=self.textLog)
+        if conn.conn():
+            self.log('Conexão feita com sucesso !')
+            procs = conn.get_empresa()
+            self.grids.append(0)
+            self.comboEmpresa.Append("TODAS AS EMPRESAS")
+            for proc in procs:
+                empresa = proc['nome']
+                grid = proc['grid']
+                self.grids.append((grid, empresa))
+                self.comboEmpresa.Append(empresa)
 
-    def __init__(self):
-        super(MainWindow, self).__init__()
+    def __init__(self, parent, cfg):
+        super(MainWindow, self).__init__(parent)
         self.grids = []
-        self.ui = Ui_MainWindow()
-        self.cfg = Config()
-        self.ui.setupUi(self)
-        self.ui.centralwidget.resize(445, 300)
-        self.ui.buttonReady.clicked.connect(self.make_actions)
+        self.cfg = cfg
         self.set_combo()
-        self.ui.dateEdit.setDateTime(QtCore.QDateTime.currentDateTime())
-        icon = QIcon(path)
-        self.setWindowIcon(icon)
-        if not self.cfg.is_config('default'):
-            msg = QMessageBox()
-            msg.setWindowIcon(icon)
-            msg.setWindowTitle("Aviso")
-            msg.setText("As configurações não foram encontradas , será aberta uma janela para configurar.")
-            msg.setIcon(QMessageBox.Information)
-            msg.setStandardButtons(QMessageBox.Ok)
-            ret = msg.exec_()
-            if ret == QMessageBox.Ok:
-                cfg = ConfigWindow(self)
-                cfg.setWindowIcon(icon)
-                cfg.exec_()
+        self.dateEdit.SetValue(wx.DateTime.Today())
+        self.SetIcon(icon)
 
-            self.hide()
+
+def run():
+    cfg = Config()
+    if not cfg.is_config('default'):
+        msg = wx.MessageBox(
+            "As configurações não foram encontradas , será aberta uma janela para configurar.",
+            caption="Aviso", style=wx.OK | wx.CENTRE | wx.ICON_ERROR, parent=None,
+        )
+
+        if msg == wx.OK:
+            cfg = ConfigWindow(None)
+            cfg.SetIcon(icon)
+            if cfg.ShowModal() == wx.OK:
+                run()
+
+    else:
+        cfg.config = cfg.get('default')
+        window = MainWindow(None, cfg.config)
+        window.Show()
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    app = wx.App()
+    icon = wx.Icon(path)
 
-    window = MainWindow()
-    window.show()
+    run()
 
-    sys.exit(app.exec_())
+    app.MainLoop()
