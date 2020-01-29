@@ -1,18 +1,24 @@
 import logging
 import os
 
-from PySide2 import QtWidgets
+
+def log(text, text_ctrl=None):
+    if text_ctrl is not None:
+        _log = text_ctrl
+        import datetime
+        now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        _log.WriteText(f"{now} | INFO : {text}\n")
+    logger.info(text)
 
 
-class QTextEditLogger(logging.Handler):
-    def __init__(self, parent):
-        super().__init__()
-        self.widget = QtWidgets.QPlainTextEdit(parent)
-        self.widget.setReadOnly(True)
+class RedirectText(object):
+    def __init__(self, aWxTextCtrl):
+        self.out = aWxTextCtrl
 
-    def emit(self, record):
-        msg = self.format(record)
-        self.widget.appendPlainText(msg)
+    def write(self, string):
+        import datetime
+        now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        self.out.WriteText(f"{now} | ClearStoq | INFO : {string}")
 
 
 logger = logging.getLogger('Check Estoque')
